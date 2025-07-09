@@ -1,239 +1,298 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import yfinance as yf
+from datetime import datetime, timedelta
+import numpy as np
+from translations import get_text
 
-# 커스텀 모듈 임포트
-from data_collector import StockDataCollector
-from strategy_analyzer import StrategyAnalyzer
-from chart_visualizer import ChartVisualizer
-
-# 페이지 설정
+# Page configuration
 st.set_page_config(
-    page_title="📈 주식 전략 대응 툴",
+    page_title="Global Stock Strategy Analyzer",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 세션 상태 초기화
-if 'data_collector' not in st.session_state:
-    st.session_state.data_collector = StockDataCollector()
-if 'strategy_analyzer' not in st.session_state:
-    st.session_state.strategy_analyzer = StrategyAnalyzer()
-if 'chart_visualizer' not in st.session_state:
-    st.session_state.chart_visualizer = ChartVisualizer()
+# Initialize session state for language
+if 'language' not in st.session_state:
+    st.session_state.language = 'en'
 
-def main():
-    """메인 애플리케이션"""
+# Language selector in sidebar
+with st.sidebar:
+    st.title(get_text('sidebar_title', st.session_state.language))
     
-    # 헤더
-    st.title("📈 주식 전략 대응 툴")
-    st.markdown("해외 주식을 중심으로 포트폴리오를 분석하고 매수/매도 전략을 시각적으로 분석할 수 있는 도구입니다.")
+    # Language selection
+    st.subheader(get_text('language', st.session_state.language) or 'Language')
+    language_option = st.selectbox(
+        get_text('language', st.session_state.language) or 'Language',
+        [get_text('english', 'en') or 'English', get_text('korean', 'ko') or 'Korean'],
+        index=0 if st.session_state.language == 'en' else 1
+    )
     
-    # 사이드바 설정
-    with st.sidebar:
-        st.header("⚙️ 설정")
-        
-        # 종목 선택
-        st.subheader("종목 선택")
-        
-        # 인기 종목 목록
-        popular_stocks = st.session_state.data_collector.get_popular_stocks()
-        stock_options = {f"{stock['symbol']} - {stock['name']}": stock['symbol'] 
-                        for stock in popular_stocks}
-        
-        selected_stock_display = st.selectbox(
-            "인기 종목 선택",
-            options=list(stock_options.keys()),
-            index=0
-        )
-        
-        selected_stock = stock_options[selected_stock_display]
-        
-        # 직접 입력 옵션
-        custom_stock = st.text_input(
-            "직접 종목 심볼 입력",
-            placeholder="예: AAPL, TSLA, GOOGL"
-        )
-        
-        if custom_stock:
-            selected_stock = custom_stock.upper()
-        
-        # 기간 설정
-        st.subheader("분석 기간")
-        period_options = {
-            "1개월": "1mo",
-            "3개월": "3mo", 
-            "6개월": "6mo",
-            "1년": "1y",
-            "2년": "2y",
-            "5년": "5y"
-        }
-        
-        selected_period = st.selectbox(
-            "분석 기간 선택",
-            options=list(period_options.keys()),
-            index=3  # 기본값: 1년
-        )
-        
-        period = period_options[selected_period]
-        
-        # 차트 타입 설정
-        st.subheader("차트 설정")
-        chart_type = st.selectbox(
-            "차트 타입",
-            options=["종합 차트", "캔들스틱", "RSI", "MACD", "거래량"],
-            index=0
-        )
-        
-        # 기술적 지표 표시 옵션
-        show_indicators = st.multiselect(
-            "표시할 지표",
-            options=["MA20", "MA50", "MA200", "볼린저 밴드"],
-            default=["MA20", "MA50"]
-        )
-        
-        # 분석 버튼
-        analyze_button = st.button("🔍 분석 시작", type="primary")
+    # Update language based on selection
+    if language_option == get_text('english', 'en'):
+        st.session_state.language = 'en'
+    else:
+        st.session_state.language = 'ko'
     
-    # 메인 콘텐츠
-    if analyze_button and selected_stock:
-        with st.spinner("데이터를 수집하고 분석 중입니다..."):
-            # 데이터 수집
-            data = st.session_state.data_collector.get_stock_data(
-                symbol=selected_stock,
-                period=period
+    st.divider()
+    
+    # Navigation menu
+    st.subheader(get_text('data_collection', st.session_state.language))
+    
+    # Stock symbol input
+    stock_symbol = st.text_input(
+        get_text('stock_symbol', st.session_state.language) or 'Stock Symbol',
+        value="AAPL",
+        help="Enter stock symbol (e.g., AAPL, GOOGL, MSFT)"
+    )
+    
+    # Date range selection
+    st.subheader(get_text('date_range', st.session_state.language) or 'Date Range')
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        start_date = st.date_input(
+            get_text('start_date', st.session_state.language) or 'Start Date',
+            value=datetime.now() - timedelta(days=365),
+            max_value=datetime.now()
+        )
+    
+    with col2:
+        end_date = st.date_input(
+            get_text('end_date', st.session_state.language) or 'End Date',
+            value=datetime.now(),
+            max_value=datetime.now()
+        )
+    
+    # Fetch data button
+    if st.button(get_text('fetch_data', st.session_state.language) or 'Fetch Data'):
+        st.session_state.data_fetched = True
+        st.session_state.stock_symbol = stock_symbol
+        st.session_state.start_date = start_date
+        st.session_state.end_date = end_date
+
+# Main content area
+st.title(get_text('title', st.session_state.language))
+
+# Welcome section (when no data is loaded)
+if 'data_fetched' not in st.session_state or not st.session_state.data_fetched:
+    st.markdown("---")
+    
+    # Welcome message
+    st.header(get_text('welcome_message', st.session_state.language))
+    st.write(get_text('description', st.session_state.language))
+    
+    # Get started section
+    st.subheader(get_text('get_started', st.session_state.language))
+    st.info(get_text('select_stock', st.session_state.language))
+    
+    # Popular stocks
+    st.subheader(get_text('popular_stocks', st.session_state.language))
+    popular_stocks = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "NFLX"]
+    
+    cols = st.columns(4)
+    for i, stock in enumerate(popular_stocks):
+        with cols[i % 4]:
+            if st.button(stock):
+                st.session_state.data_fetched = True
+                st.session_state.stock_symbol = stock
+                st.session_state.start_date = datetime.now() - timedelta(days=365)
+                st.session_state.end_date = datetime.now()
+                st.rerun()
+    
+    # Features overview
+    st.markdown("---")
+    st.subheader("Features")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**📊 Technical Analysis**")
+        st.write("- Moving Averages")
+        st.write("- RSI, MACD, Bollinger Bands")
+        st.write("- Volume Analysis")
+        
+        st.markdown("**📈 Strategy Backtesting**")
+        st.write("- Signal Generation")
+        st.write("- Performance Metrics")
+        st.write("- Risk Analysis")
+    
+    with col2:
+        st.markdown("**💼 Portfolio Optimization**")
+        st.write("- Asset Allocation")
+        st.write("- Risk Management")
+        st.write("- Rebalancing")
+        
+        st.markdown("**🌍 Global Markets**")
+        st.write("- US Stocks")
+        st.write("- International Markets")
+        st.write("- Real-time Data")
+
+# Data analysis section (when data is loaded)
+else:
+    try:
+        # Fetch stock data
+        with st.spinner(get_text('data_loading', st.session_state.language)):
+            stock_data = yf.download(
+                st.session_state.stock_symbol,
+                start=st.session_state.start_date,
+                end=st.session_state.end_date,
+                progress=False
+            )
+        
+        if stock_data.empty:
+            st.error(get_text('no_data_found', st.session_state.language) or 'No data found for this date range')
+        else:
+            st.success(get_text('success_loaded', st.session_state.language) or 'Data loaded successfully')
+            
+            # Display basic info
+            st.subheader(f"{st.session_state.stock_symbol} Analysis")
+            
+            # Price overview
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                current_price = stock_data['Close'].iloc[-1]
+                st.metric("Current Price", f"${current_price:.2f}")
+            
+            with col2:
+                price_change = stock_data['Close'].iloc[-1] - stock_data['Close'].iloc[-2]
+                price_change_pct = (price_change / stock_data['Close'].iloc[-2]) * 100
+                st.metric("Daily Change", f"${price_change:.2f}", f"{price_change_pct:.2f}%")
+            
+            with col3:
+                volume = stock_data['Volume'].iloc[-1]
+                st.metric("Volume", f"{volume:,}")
+            
+            with col4:
+                avg_volume = stock_data['Volume'].mean()
+                st.metric("Avg Volume", f"{avg_volume:,.0f}")
+            
+            # Price chart
+            st.subheader(get_text('price_charts', st.session_state.language) or 'Price Charts')
+            
+            fig = go.Figure()
+            
+            fig.add_trace(go.Candlestick(
+                x=stock_data.index,
+                open=stock_data['Open'],
+                high=stock_data['High'],
+                low=stock_data['Low'],
+                close=stock_data['Close'],
+                name='Price'
+            ))
+            
+            fig.update_layout(
+                title=f"{st.session_state.stock_symbol} Stock Price",
+                xaxis_title="Date",
+                yaxis_title="Price ($)",
+                height=500
             )
             
-            if data is not None and not data.empty:
-                # 주식 정보 표시
-                stock_info = st.session_state.data_collector.get_stock_info(selected_stock)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Technical indicators
+            st.subheader(get_text('technical_indicators', st.session_state.language) or 'Technical Indicators')
+            
+            with st.spinner(get_text('calculating_indicators', st.session_state.language) or 'Calculating technical indicators...'):
+                # Calculate moving averages
+                stock_data['MA20'] = stock_data['Close'].rolling(window=20).mean()
+                stock_data['MA50'] = stock_data['Close'].rolling(window=50).mean()
+                stock_data['MA200'] = stock_data['Close'].rolling(window=200).mean()
                 
-                if stock_info:
-                    st.subheader(f"📊 {stock_info['name']} ({selected_stock})")
-                    
-                    # 기본 정보 표시
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    with col1:
-                        st.metric(
-                            label="현재가",
-                            value=f"${stock_info['current_price']:.2f}" if stock_info['current_price'] else "N/A"
-                        )
-                    
-                    with col2:
-                        st.metric(
-                            label="시가총액",
-                            value=f"${stock_info['market_cap']:,.0f}" if stock_info['market_cap'] else "N/A"
-                        )
-                    
-                    with col3:
-                        st.metric(
-                            label="P/E 비율",
-                            value=f"{stock_info['pe_ratio']:.2f}" if stock_info['pe_ratio'] else "N/A"
-                        )
-                    
-                    with col4:
-                        st.metric(
-                            label="배당 수익률",
-                            value=f"{stock_info['dividend_yield']:.2f}%" if stock_info['dividend_yield'] else "N/A"
-                        )
+                # Calculate RSI
+                delta = stock_data['Close'].diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                rs = gain / loss
+                stock_data['RSI'] = 100 - (100 / (1 + rs))
                 
-                # 기술적 분석 수행
-                analysis = st.session_state.strategy_analyzer.get_comprehensive_analysis(data)
-                
-                # 분석 결과 표시
-                st.session_state.chart_visualizer.display_analysis_summary(analysis)
-                
-                # 차트 표시
-                st.subheader("📈 차트 분석")
-                
-                if chart_type == "종합 차트":
-                    fig = st.session_state.chart_visualizer.create_comprehensive_chart(data)
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                elif chart_type == "캔들스틱":
-                    fig = st.session_state.chart_visualizer.create_candlestick_chart(
-                        data, show_indicators=show_indicators
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # 거래량 차트도 함께 표시
-                    volume_fig = st.session_state.chart_visualizer.create_volume_chart(data)
-                    st.plotly_chart(volume_fig, use_container_width=True)
-                
-                elif chart_type == "RSI":
-                    fig = st.session_state.chart_visualizer.create_rsi_chart(data)
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                elif chart_type == "MACD":
-                    fig = st.session_state.chart_visualizer.create_macd_chart(data)
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                elif chart_type == "거래량":
-                    fig = st.session_state.chart_visualizer.create_volume_chart(data)
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                # 데이터 테이블 표시
-                with st.expander("📋 원본 데이터 보기"):
-                    st.dataframe(data.tail(20))
-                
-            else:
-                st.error(f"'{selected_stock}' 종목의 데이터를 가져올 수 없습니다. 종목 심볼을 확인해주세요.")
+                # Calculate MACD
+                exp1 = stock_data['Close'].ewm(span=12, adjust=False).mean()
+                exp2 = stock_data['Close'].ewm(span=26, adjust=False).mean()
+                stock_data['MACD'] = exp1 - exp2
+                stock_data['Signal'] = stock_data['MACD'].ewm(span=9, adjust=False).mean()
+            
+            # Create subplots for indicators
+            fig = make_subplots(
+                rows=3, cols=1,
+                subplot_titles=('Price with Moving Averages', 'RSI', 'MACD'),
+                vertical_spacing=0.1,
+                row_heights=[0.5, 0.25, 0.25]
+            )
+            
+            # Price and moving averages
+            fig.add_trace(go.Scatter(
+                x=stock_data.index, y=stock_data['Close'],
+                name='Price', line=dict(color='blue')
+            ), row=1, col=1)
+            
+            fig.add_trace(go.Scatter(
+                x=stock_data.index, y=stock_data['MA20'],
+                name='MA20', line=dict(color='orange')
+            ), row=1, col=1)
+            
+            fig.add_trace(go.Scatter(
+                x=stock_data.index, y=stock_data['MA50'],
+                name='MA50', line=dict(color='red')
+            ), row=1, col=1)
+            
+            # RSI
+            fig.add_trace(go.Scatter(
+                x=stock_data.index, y=stock_data['RSI'],
+                name='RSI', line=dict(color='purple')
+            ), row=2, col=1)
+            
+            fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
+            
+            # MACD
+            fig.add_trace(go.Scatter(
+                x=stock_data.index, y=stock_data['MACD'],
+                name='MACD', line=dict(color='blue')
+            ), row=3, col=1)
+            
+            fig.add_trace(go.Scatter(
+                x=stock_data.index, y=stock_data['Signal'],
+                name='Signal', line=dict(color='red')
+            ), row=3, col=1)
+            
+            fig.update_layout(height=800, showlegend=True)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Performance metrics
+            st.subheader(get_text('performance_metrics', st.session_state.language))
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                total_return = ((stock_data['Close'].iloc[-1] - stock_data['Close'].iloc[0]) / stock_data['Close'].iloc[0]) * 100
+                st.metric(get_text('total_return', st.session_state.language), f"{total_return:.2f}%")
+            
+            with col2:
+                volatility = stock_data['Close'].pct_change().std() * np.sqrt(252) * 100
+                st.metric(get_text('volatility', st.session_state.language), f"{volatility:.2f}%")
+            
+            with col3:
+                max_drawdown = ((stock_data['Close'] / stock_data['Close'].cummax() - 1) * 100).min()
+                st.metric(get_text('max_drawdown', st.session_state.language), f"{max_drawdown:.2f}%")
     
-    # 초기 화면 안내
-    else:
-        st.info("👈 왼쪽 사이드바에서 종목을 선택하고 분석을 시작해주세요.")
-        
-        # 기능 소개
-        st.subheader("🎯 주요 기능")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("""
-            **📊 실시간 데이터 수집**
-            - Yahoo Finance API를 통한 해외 주식 데이터
-            - 다양한 시간대별 데이터 제공
-            
-            **📈 기술적 분석**
-            - 이동평균선 (20일, 50일, 200일)
-            - RSI (상대강도지수)
-            - MACD (이동평균수렴확산)
-            - 볼린저 밴드
-            """)
-        
-        with col2:
-            st.markdown("""
-            **🎨 인터랙티브 차트**
-            - 캔들스틱 차트
-            - 거래량 분석
-            - 기술적 지표 오버레이
-            
-            **📋 전략 분석**
-            - 매수/매도 신호 분석
-            - 종합 전략 평가
-            - 실시간 시각화
-            """)
-        
-        # 사용법 안내
-        st.subheader("📖 사용법")
-        st.markdown("""
-        1. **종목 선택**: 사이드바에서 인기 종목을 선택하거나 직접 종목 심볼을 입력하세요
-        2. **기간 설정**: 분석할 기간을 선택하세요 (1개월~5년)
-        3. **차트 설정**: 원하는 차트 타입과 표시할 지표를 선택하세요
-        4. **분석 시작**: "분석 시작" 버튼을 클릭하여 분석을 실행하세요
-        """)
-        
-        # 주의사항
-        st.subheader("⚠️ 주의사항")
-        st.markdown("""
-        - 이 도구는 교육 및 참고 목적으로만 사용해주세요
-        - 투자 결정은 충분한 분석과 전문가 상담 후 내려주세요
-        - 과거 성과가 미래 수익을 보장하지 않습니다
-        - 실시간 데이터는 지연될 수 있습니다
-        """)
+    except Exception as e:
+        st.error(f"{get_text('error_loading', st.session_state.language)}: {str(e)}")
 
-if __name__ == "__main__":
-    main() 
+# Footer
+st.markdown("---")
+st.markdown(
+    f"""
+    <div style='text-align: center; color: gray;'>
+        {get_text('title', st.session_state.language)} | 
+        <a href='#'>{get_text('help_documentation', st.session_state.language)}</a> | 
+        <a href='#'>{get_text('about', st.session_state.language)}</a> | 
+        <a href='#'>{get_text('contact_support', st.session_state.language)}</a>
+    </div>
+    """,
+    unsafe_allow_html=True
+) 
