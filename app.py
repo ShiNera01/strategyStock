@@ -165,7 +165,7 @@ else:
             
             with col3:
                 volume = stock_data['Volume'].iloc[-1]
-                st.metric("Volume", f"{volume:,}")
+                st.metric("Volume", f"{volume:,.0f}")
             
             with col4:
                 avg_volume = stock_data['Volume'].mean()
@@ -264,21 +264,21 @@ else:
             st.plotly_chart(fig, use_container_width=True)
             
             # Performance metrics
-            st.subheader(get_text('performance_metrics', st.session_state.language))
+            st.subheader(get_text('performance_metrics', st.session_state.language) or 'Performance Metrics')
             
             col1, col2, col3 = st.columns(3)
             
             with col1:
                 total_return = ((stock_data['Close'].iloc[-1] - stock_data['Close'].iloc[0]) / stock_data['Close'].iloc[0]) * 100
-                st.metric(get_text('total_return', st.session_state.language), f"{total_return:.2f}%")
+                st.metric(get_text('total_return', st.session_state.language) or 'Total Return', f"{total_return:.2f}%")
             
             with col2:
                 volatility = stock_data['Close'].pct_change().std() * np.sqrt(252) * 100
-                st.metric(get_text('volatility', st.session_state.language), f"{volatility:.2f}%")
+                st.metric(get_text('volatility', st.session_state.language) or 'Volatility', f"{volatility:.2f}%")
             
             with col3:
                 max_drawdown = ((stock_data['Close'] / stock_data['Close'].cummax() - 1) * 100).min()
-                st.metric(get_text('max_drawdown', st.session_state.language), f"{max_drawdown:.2f}%")
+                st.metric(get_text('max_drawdown', st.session_state.language) or 'Max Drawdown', f"{max_drawdown:.2f}%")
     
     except Exception as e:
         st.error(f"{get_text('error_loading', st.session_state.language)}: {str(e)}")
