@@ -5,6 +5,7 @@ from plotly.subplots import make_subplots
 import yfinance as yf
 from datetime import datetime, timedelta
 import numpy as np
+import time
 from translations import get_text
 
 # Page configuration
@@ -15,13 +16,75 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize session state for language
+# Initialize session state for language and auto refresh
 if 'language' not in st.session_state:
     st.session_state.language = 'en'
+if 'auto_refresh' not in st.session_state:
+    st.session_state.auto_refresh = False
+if 'trading_signals' not in st.session_state:
+    st.session_state.trading_signals = []
+
+# Trading strategy functions
+def calculate_trading_signals(data):
+    """Calculate trading signals based on technical indicators"""
+    signals = []
+    
+    # RSI signals
+    if data['RSI'].iloc[-1] < 30:
+        signals.append(('BUY', 'RSI oversold', data['Close'].iloc[-1]))
+    elif data['RSI'].iloc[-1] > 70:
+        signals.append(('SELL', 'RSI overbought', data['Close'].iloc[-1]))
+    
+    # Moving average signals
+    if data['Close'].iloc[-1] > data['MA20'].iloc[-1] and data['Close'].iloc[-2] <= data['MA20'].iloc[-2]:
+        signals.append(('BUY', 'Price crossed above MA20', data['Close'].iloc[-1]))
+    elif data['Close'].iloc[-1] < data['MA20'].iloc[-1] and data['Close'].iloc[-2] >= data['MA20'].iloc[-2]:
+        signals.append(('SELL', 'Price crossed below MA20', data['Close'].iloc[-1]))
+    
+    # MACD signals
+    if data['MACD'].iloc[-1] > data['Signal'].iloc[-1] and data['MACD'].iloc[-2] <= data['Signal'].iloc[-2]:
+        signals.append(('BUY', 'MACD bullish crossover', data['Close'].iloc[-1]))
+    elif data['MACD'].iloc[-1] < data['Signal'].iloc[-1] and data['MACD'].iloc[-2] >= data['Signal'].iloc[-2]:
+        signals.append(('SELL', 'MACD bearish crossover', data['Close'].iloc[-1]))
+    
+    return signals
+
+def get_real_time_data(symbol):
+    """Get real-time stock data"""
+    try:
+        # Get current data
+        stock = yf.Ticker(symbol)
+        current_data = stock.history(period="1d", interval="1m")
+        
+        # Get historical data for indicators
+        historical_data = stock.history(period="1y")
+        
+        if not current_data.empty and not historical_data.empty:
+            # Calculate indicators
+            historical_data['MA20'] = historical_data['Close'].rolling(window=20).mean()
+            historical_data['MA50'] = historical_data['Close'].rolling(window=50).mean()
+            
+            # RSI
+            delta = historical_data['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            historical_data['RSI'] = 100 - (100 / (1 + rs))
+            
+            # MACD
+            exp1 = historical_data['Close'].ewm(span=12, adjust=False).mean()
+            exp2 = historical_data['Close'].ewm(span=26, adjust=False).mean()
+            historical_data['MACD'] = exp1 - exp2
+            historical_data['Signal'] = historical_data['MACD'].ewm(span=9, adjust=False).mean()
+            
+            return historical_data, current_data.iloc[-1]
+    except Exception as e:
+        st.error(f"Error fetching real-time data: {str(e)}")
+        return None, None
 
 # Language selector in sidebar
 with st.sidebar:
-    st.title(get_text('sidebar_title', st.session_state.language))
+    st.title(get_text('sidebar_title', st.session_state.language) or 'Navigation')
     
     # Language selection
     st.subheader(get_text('language', st.session_state.language) or 'Language')
@@ -39,8 +102,25 @@ with st.sidebar:
     
     st.divider()
     
+    # Auto refresh settings
+    st.subheader("🔄 Auto Refresh Settings")
+    auto_refresh = st.checkbox(
+        "Enable Auto Refresh (5 min intervals)",
+        value=st.session_state.auto_refresh,
+        help="Automatically refresh data every 5 minutes"
+    )
+    
+    if auto_refresh != st.session_state.auto_refresh:
+        st.session_state.auto_refresh = auto_refresh
+        st.rerun()
+    
+    if st.session_state.auto_refresh:
+        st.info("Auto refresh is enabled. Data will update every 5 minutes.")
+    
+    st.divider()
+    
     # Navigation menu
-    st.subheader(get_text('data_collection', st.session_state.language))
+    st.subheader(get_text('data_collection', st.session_state.language) or 'Data Collection')
     
     # Stock symbol input
     stock_symbol = st.text_input(
@@ -75,22 +155,22 @@ with st.sidebar:
         st.session_state.end_date = end_date
 
 # Main content area
-st.title(get_text('title', st.session_state.language))
+st.title(get_text('title', st.session_state.language) or 'Global Stock Strategy Analyzer')
 
 # Welcome section (when no data is loaded)
 if 'data_fetched' not in st.session_state or not st.session_state.data_fetched:
     st.markdown("---")
     
     # Welcome message
-    st.header(get_text('welcome_message', st.session_state.language))
-    st.write(get_text('description', st.session_state.language))
+    st.header(get_text('welcome_message', st.session_state.language) or 'Welcome to Global Stock Strategy Analyzer')
+    st.write(get_text('description', st.session_state.language) or 'Analyze global stocks with advanced technical indicators and strategy backtesting')
     
     # Get started section
-    st.subheader(get_text('get_started', st.session_state.language))
-    st.info(get_text('select_stock', st.session_state.language))
+    st.subheader(get_text('get_started', st.session_state.language) or 'Get Started')
+    st.info(get_text('select_stock', st.session_state.language) or 'Select a stock symbol to begin analysis')
     
     # Popular stocks
-    st.subheader(get_text('popular_stocks', st.session_state.language))
+    st.subheader(get_text('popular_stocks', st.session_state.language) or 'Popular Stocks')
     popular_stocks = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "NFLX"]
     
     cols = st.columns(4)
@@ -134,22 +214,43 @@ if 'data_fetched' not in st.session_state or not st.session_state.data_fetched:
 # Data analysis section (when data is loaded)
 else:
     try:
-        # Fetch stock data
-        with st.spinner(get_text('data_loading', st.session_state.language)):
-            stock_data = yf.download(
-                st.session_state.stock_symbol,
-                start=st.session_state.start_date,
-                end=st.session_state.end_date,
-                progress=False
-            )
+        # Real-time data fetching
+        if st.session_state.auto_refresh:
+            with st.spinner("Fetching real-time data..."):
+                historical_data, current_data = get_real_time_data(st.session_state.stock_symbol)
+                
+                if historical_data is not None and current_data is not None:
+                    # Update with real-time data
+                    stock_data = historical_data.copy()
+                    stock_data.loc[current_data.name] = current_data
+                    
+                    # Calculate trading signals
+                    trading_signals = calculate_trading_signals(stock_data)
+                    st.session_state.trading_signals = trading_signals
+                else:
+                    st.error("Failed to fetch real-time data")
+                    stock_data = None
+        else:
+            # Fetch stock data (historical)
+            with st.spinner(get_text('data_loading', st.session_state.language) or 'Loading data...'):
+                stock_data = yf.download(
+                    st.session_state.stock_symbol,
+                    start=st.session_state.start_date,
+                    end=st.session_state.end_date,
+                    progress=False
+                )
         
-        if stock_data.empty:
+        if stock_data is None or stock_data.empty:
             st.error(get_text('no_data_found', st.session_state.language) or 'No data found for this date range')
         else:
             st.success(get_text('success_loaded', st.session_state.language) or 'Data loaded successfully')
             
             # Display basic info
             st.subheader(f"{st.session_state.stock_symbol} Analysis")
+            
+            # Real-time status
+            if st.session_state.auto_refresh:
+                st.info("🔄 Real-time monitoring active - Data updates every 5 minutes")
             
             # Price overview
             col1, col2, col3, col4 = st.columns(4)
@@ -170,6 +271,16 @@ else:
             with col4:
                 avg_volume = int(stock_data['Volume'].mean())
                 st.metric("Avg Volume", f"{avg_volume:,}")
+            
+            # Trading signals section
+            if st.session_state.trading_signals:
+                st.subheader("🎯 Trading Signals")
+                
+                for signal_type, reason, price in st.session_state.trading_signals:
+                    if signal_type == 'BUY':
+                        st.success(f"🟢 {signal_type}: {reason} at ${price:.2f}")
+                    else:
+                        st.error(f"🔴 {signal_type}: {reason} at ${price:.2f}")
             
             # Price chart
             st.subheader(get_text('price_charts', st.session_state.language) or 'Price Charts')
@@ -281,17 +392,22 @@ else:
                 st.metric(get_text('max_drawdown', st.session_state.language) or 'Max Drawdown', f"{max_drawdown:.2f}%")
     
     except Exception as e:
-        st.error(f"{get_text('error_loading', st.session_state.language)}: {str(e)}")
+        st.error(f"{get_text('error_loading', st.session_state.language) or 'Error loading data'}: {str(e)}")
+
+# Auto refresh logic
+if st.session_state.auto_refresh:
+    time.sleep(300)  # 5 minutes
+    st.rerun()
 
 # Footer
 st.markdown("---")
 st.markdown(
     f"""
     <div style='text-align: center; color: gray;'>
-        {get_text('title', st.session_state.language)} | 
-        <a href='#'>{get_text('help_documentation', st.session_state.language)}</a> | 
-        <a href='#'>{get_text('about', st.session_state.language)}</a> | 
-        <a href='#'>{get_text('contact_support', st.session_state.language)}</a>
+        {get_text('title', st.session_state.language) or 'Global Stock Strategy Analyzer'} | 
+        <a href='#'>{get_text('help_documentation', st.session_state.language) or 'Help & Documentation'}</a> | 
+        <a href='#'>{get_text('about', st.session_state.language) or 'About'}</a> | 
+        <a href='#'>{get_text('contact_support', st.session_state.language) or 'Contact Support'}</a>
     </div>
     """,
     unsafe_allow_html=True
