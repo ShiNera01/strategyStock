@@ -1,0 +1,20 @@
+[
+  {
+    "symbol": "ZBRA",
+    "shares": 100.0,
+    "avg_price": 8.0,
+    "purchase_date": "2025-07-09",
+    "last_updated": "2025-07-09 19:20"
+  },
+  {
+    "symbol": "AAAE",
+    "shares": 1.0,
+    "avg_price": 100.0,
+    "purchase_date": "2025-07-09",
+    "last_updated": "2025-07-09 19:21"
+  },
+  {
+    "symbol": "AAPL",
+    "shares": 1.0,
+    "avg_price": 210.03500366210938,
+    "purchase_date": 
