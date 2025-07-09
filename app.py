@@ -155,21 +155,21 @@ else:
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                current_price = stock_data['Close'].iloc[-1]
+                current_price = float(stock_data['Close'].iloc[-1])
                 st.metric("Current Price", f"${current_price:.2f}")
             
             with col2:
-                price_change = stock_data['Close'].iloc[-1] - stock_data['Close'].iloc[-2]
-                price_change_pct = (price_change / stock_data['Close'].iloc[-2]) * 100
+                price_change = float(stock_data['Close'].iloc[-1] - stock_data['Close'].iloc[-2])
+                price_change_pct = float((price_change / stock_data['Close'].iloc[-2]) * 100)
                 st.metric("Daily Change", f"${price_change:.2f}", f"{price_change_pct:.2f}%")
             
             with col3:
-                volume = stock_data['Volume'].iloc[-1]
-                st.metric("Volume", f"{volume:,.0f}")
+                volume = int(stock_data['Volume'].iloc[-1])
+                st.metric("Volume", f"{volume:,}")
             
             with col4:
-                avg_volume = stock_data['Volume'].mean()
-                st.metric("Avg Volume", f"{avg_volume:,.0f}")
+                avg_volume = int(stock_data['Volume'].mean())
+                st.metric("Avg Volume", f"{avg_volume:,}")
             
             # Price chart
             st.subheader(get_text('price_charts', st.session_state.language) or 'Price Charts')
@@ -269,15 +269,15 @@ else:
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                total_return = ((stock_data['Close'].iloc[-1] - stock_data['Close'].iloc[0]) / stock_data['Close'].iloc[0]) * 100
+                total_return = float(((stock_data['Close'].iloc[-1] - stock_data['Close'].iloc[0]) / stock_data['Close'].iloc[0]) * 100)
                 st.metric(get_text('total_return', st.session_state.language) or 'Total Return', f"{total_return:.2f}%")
             
             with col2:
-                volatility = stock_data['Close'].pct_change().std() * np.sqrt(252) * 100
+                volatility = float(stock_data['Close'].pct_change().std() * np.sqrt(252) * 100)
                 st.metric(get_text('volatility', st.session_state.language) or 'Volatility', f"{volatility:.2f}%")
             
             with col3:
-                max_drawdown = ((stock_data['Close'] / stock_data['Close'].cummax() - 1) * 100).min()
+                max_drawdown = float(((stock_data['Close'] / stock_data['Close'].cummax() - 1) * 100).min())
                 st.metric(get_text('max_drawdown', st.session_state.language) or 'Max Drawdown', f"{max_drawdown:.2f}%")
     
     except Exception as e:
